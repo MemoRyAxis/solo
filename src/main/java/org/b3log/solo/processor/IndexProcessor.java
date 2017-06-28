@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2015, b3log.org
+ * Copyright (c) 2010-2017, b3log.org & hacpai.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,15 +16,9 @@
 package org.b3log.solo.processor;
 
 import freemarker.template.Template;
-import java.io.IOException;
-import java.io.PrintWriter;
-import java.io.StringWriter;
-import java.util.Map;
-import javax.inject.Inject;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import org.apache.commons.lang.StringUtils;
 import org.b3log.latke.Keys;
+import org.b3log.latke.ioc.inject.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.model.Pagination;
@@ -39,8 +33,11 @@ import org.b3log.latke.servlet.renderer.freemarker.AbstractFreeMarkerRenderer;
 import org.b3log.latke.servlet.renderer.freemarker.FreeMarkerRenderer;
 import org.b3log.latke.util.Locales;
 import org.b3log.latke.util.Requests;
+import org.b3log.latke.util.freemarker.Templates;
+import org.b3log.solo.SoloServletListener;
 import org.b3log.solo.model.Common;
 import org.b3log.solo.model.Option;
+import org.b3log.solo.model.Skin;
 import org.b3log.solo.processor.renderer.ConsoleRenderer;
 import org.b3log.solo.processor.util.Filler;
 import org.b3log.solo.service.PreferenceQueryService;
@@ -48,12 +45,21 @@ import org.b3log.solo.service.StatisticMgmtService;
 import org.b3log.solo.util.Skins;
 import org.json.JSONObject;
 
+import javax.servlet.http.Cookie;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.util.Map;
+import java.util.Set;
+
 /**
  * Index processor.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
  * @author <a href="mailto:385321165@qq.com">DASHU</a>
- * @version 1.1.2.6, Nov 20, 2015
+ * @version 1.2.4.6, Jun 28, 2017
  * @since 0.3.1
  */
 @RequestProcessor
@@ -91,24 +97,43 @@ public class IndexProcessor {
     /**
      * Shows index with the specified context.
      *
-     * @param context the specified context
-     * @param request the specified HTTP servlet request
+     * @param context  the specified context
+     * @param request  the specified HTTP servlet request
      * @param response the specified HTTP servlet response
      */
     @RequestProcessing(value = {"/\\d*", ""}, uriPatternsMode = URIPatternMode.REGEX, method = HTTPRequestMethod.GET)
     public void showIndex(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response) {
         final AbstractFreeMarkerRenderer renderer = new FreeMarkerRenderer();
-
         context.setRenderer(renderer);
-
         renderer.setTemplateName("index.ftl");
         final Map<String, Object> dataModel = renderer.getDataModel();
-
         final String requestURI = request.getRequestURI();
 
         try {
             final int currentPageNum = getCurrentPageNum(requestURI);
             final JSONObject preference = preferenceQueryService.getPreference();
+
+            // https://github.com/b3log/solo/issues/12060
+            String specifiedSkin = Skins.getSkinDirName(request);
+            if (null != specifiedSkin) {
+                if ("default".equals(specifiedSkin)) {
+                    specifiedSkin = preference.optString(Option.ID_C_SKIN_DIR_NAME);
+
+                    final Cookie cookie = new Cookie(Skin.SKIN, null);
+                    cookie.setMaxAge(60 * 60); // 1 hour
+                    cookie.setPath("/");
+                    response.addCookie(cookie);
+                }
+            } else {
+                specifiedSkin = preference.optString(Option.ID_C_SKIN_DIR_NAME);
+            }
+
+            final Set<String> skinDirNames = Skins.getSkinDirNames();
+            if (skinDirNames.contains(specifiedSkin)) {
+                Templates.MAIN_CFG.setServletContextForTemplateLoading(SoloServletListener.getServletContext(),
+                        "/skins/" + specifiedSkin);
+                request.setAttribute(Keys.TEMAPLTE_DIR_NAME, specifiedSkin);
+            }
 
             Skins.fillLangs(preference.optString(Option.ID_C_LOCALE_STRING), (String) request.getAttribute(Keys.TEMAPLTE_DIR_NAME), dataModel);
 
@@ -121,14 +146,22 @@ public class IndexProcessor {
             dataModel.put(Pagination.PAGINATION_CURRENT_PAGE_NUM, currentPageNum);
             final int previousPageNum = currentPageNum > 1 ? currentPageNum - 1 : 0;
             dataModel.put(Pagination.PAGINATION_PREVIOUS_PAGE_NUM, previousPageNum);
-            
+
             final Integer pageCount = (Integer) dataModel.get(Pagination.PAGINATION_PAGE_COUNT);
-            final int nextPageNum = currentPageNum+1 > pageCount ? pageCount : currentPageNum + 1;
+            final int nextPageNum = currentPageNum + 1 > pageCount ? pageCount : currentPageNum + 1;
             dataModel.put(Pagination.PAGINATION_NEXT_PAGE_NUM, nextPageNum);
 
             dataModel.put(Common.PATH, "");
 
             statisticMgmtService.incBlogViewCount(request, response);
+
+            // https://github.com/b3log/solo/issues/12060
+            if (!preference.optString(Skin.SKIN_DIR_NAME).equals(specifiedSkin) && !Requests.mobileRequest(request)) {
+                final Cookie cookie = new Cookie(Skin.SKIN, specifiedSkin);
+                cookie.setMaxAge(60 * 60); // 1 hour
+                cookie.setPath("/");
+                response.addCookie(cookie);
+            }
         } catch (final ServiceException e) {
             LOGGER.log(Level.ERROR, e.getMessage(), e);
 
@@ -143,8 +176,8 @@ public class IndexProcessor {
     /**
      * Shows kill browser page with the specified context.
      *
-     * @param context the specified context
-     * @param request the specified HTTP servlet request
+     * @param context  the specified context
+     * @param request  the specified HTTP servlet request
      * @param response the specified HTTP servlet response
      */
     @RequestProcessing(value = "/kill-browser", method = HTTPRequestMethod.GET)
@@ -161,7 +194,9 @@ public class IndexProcessor {
             dataModel.putAll(langs);
             final JSONObject preference = preferenceQueryService.getPreference();
 
+            filler.fillBlogHeader(request, response, dataModel, preference);
             filler.fillBlogFooter(request, dataModel, preference);
+            Keys.fillServer(dataModel);
             Keys.fillRuntime(dataModel);
             filler.fillMinified(dataModel);
         } catch (final ServiceException e) {
@@ -178,8 +213,8 @@ public class IndexProcessor {
     /**
      * Show register page.
      *
-     * @param context the specified context
-     * @param request the specified HTTP servlet request
+     * @param context  the specified context
+     * @param request  the specified HTTP servlet request
      * @param response the specified HTTP servlet response
      */
     @RequestProcessing(value = "/register", method = HTTPRequestMethod.GET)

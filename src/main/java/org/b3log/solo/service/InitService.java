@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2015, b3log.org
+ * Copyright (c) 2010-2017, b3log.org & hacpai.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,19 +15,13 @@
  */
 package org.b3log.solo.service;
 
-import java.net.URL;
-import java.text.ParseException;
-import java.util.Date;
-import java.util.List;
-import java.util.Set;
-import javax.inject.Inject;
-import javax.servlet.ServletContext;
-import org.apache.commons.lang.StringEscapeUtils;
 import org.apache.commons.lang.time.DateFormatUtils;
 import org.apache.commons.lang.time.DateUtils;
 import org.b3log.latke.Keys;
 import org.b3log.latke.Latkes;
+import org.b3log.latke.RuntimeDatabase;
 import org.b3log.latke.RuntimeEnv;
+import org.b3log.latke.ioc.inject.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.model.Role;
@@ -49,15 +43,7 @@ import org.b3log.latke.util.freemarker.Templates;
 import org.b3log.solo.SoloServletListener;
 import org.b3log.solo.model.*;
 import org.b3log.solo.model.Option.DefaultPreference;
-import org.b3log.solo.repository.ArchiveDateArticleRepository;
-import org.b3log.solo.repository.ArchiveDateRepository;
-import org.b3log.solo.repository.ArticleRepository;
-import org.b3log.solo.repository.CommentRepository;
-import org.b3log.solo.repository.OptionRepository;
-import org.b3log.solo.repository.StatisticRepository;
-import org.b3log.solo.repository.TagArticleRepository;
-import org.b3log.solo.repository.TagRepository;
-import org.b3log.solo.repository.UserRepository;
+import org.b3log.solo.repository.*;
 import org.b3log.solo.util.Comments;
 import org.b3log.solo.util.Skins;
 import org.b3log.solo.util.Thumbnails;
@@ -66,11 +52,18 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import javax.servlet.ServletContext;
+import java.net.URL;
+import java.text.ParseException;
+import java.util.Date;
+import java.util.List;
+import java.util.Set;
+
 /**
  * Solo initialization service.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.4.2.8, Nov 20, 2015
+ * @version 1.5.2.11, Nov 8, 2016
  * @since 0.4.0
  */
 @Service
@@ -134,6 +127,12 @@ public class InitService {
      */
     @Inject
     private CommentRepository commentRepository;
+
+    /**
+     * Link repository.
+     */
+    @Inject
+    private LinkRepository linkRepository;
 
     /**
      * Maximum count of initialization.
@@ -212,13 +211,20 @@ public class InitService {
         final RuntimeEnv runtimeEnv = Latkes.getRuntimeEnv();
 
         if (RuntimeEnv.LOCAL == runtimeEnv) {
-            LOGGER.log(Level.INFO, "Solo is running on [" + runtimeEnv + "] environment, database [{0}], creates all tables",
-                    Latkes.getRuntimeDatabase());
-            final List<CreateTableResult> createTableResults = JdbcRepositories.initAllTables();
+            LOGGER.log(Level.INFO, "Solo is running on [" + runtimeEnv + "] environment, database [{0}], creates "
+                    + "all tables", Latkes.getRuntimeDatabase());
 
+            if (RuntimeDatabase.H2 == Latkes.getRuntimeDatabase()) {
+                String dataDir = Latkes.getLocalProperty("jdbc.URL");
+                dataDir = dataDir.replace("~", System.getProperty("user.home"));
+                LOGGER.log(Level.INFO, "YOUR DATA will be stored in directory [" + dataDir + "], "
+                        + "please pay more attention to it~");
+            }
+
+            final List<CreateTableResult> createTableResults = JdbcRepositories.initAllTables();
             for (final CreateTableResult createTableResult : createTableResults) {
-                LOGGER.log(Level.INFO, "Create table result[tableName={0}, isSuccess={1}]",
-                        new Object[]{createTableResult.getName(), createTableResult.isSuccess()});
+                LOGGER.log(Level.DEBUG, "Create table result[tableName={0}, isSuccess={1}]",
+                        createTableResult.getName(), createTableResult.isSuccess());
             }
         }
 
@@ -235,6 +241,7 @@ public class InitService {
                     initPreference(requestJSONObject);
                     initReplyNotificationTemplate();
                     initAdmin(requestJSONObject);
+                    initLink();
                 }
 
                 transaction.commit();
@@ -295,7 +302,7 @@ public class InitService {
 
         article.put(Article.ARTICLE_ABSTRACT, content);
         article.put(Article.ARTICLE_CONTENT, content);
-        article.put(Article.ARTICLE_TAGS_REF, "B3log,Solo");
+        article.put(Article.ARTICLE_TAGS_REF, "Solo");
         article.put(Article.ARTICLE_PERMALINK, "/hello-solo");
         article.put(Article.ARTICLE_IS_PUBLISHED, true);
         article.put(Article.ARTICLE_HAD_BEEN_PUBLISHED, true);
@@ -321,10 +328,10 @@ public class InitService {
         final JSONObject comment = new JSONObject();
 
         comment.put(Keys.OBJECT_ID, articleId);
-        comment.put(Comment.COMMENT_NAME, "88250");
+        comment.put(Comment.COMMENT_NAME, "Daniel");
         comment.put(Comment.COMMENT_EMAIL, "dl88250@gmail.com");
-        comment.put(Comment.COMMENT_URL, "http://88250.b3log.org");
-        comment.put(Comment.COMMENT_CONTENT, StringEscapeUtils.escapeHtml(langPropsService.get("helloWorld.comment.content")));
+        comment.put(Comment.COMMENT_URL, "https://hacpai.com/member/88250");
+        comment.put(Comment.COMMENT_CONTENT, langPropsService.get("helloWorld.comment.content"));
         comment.put(Comment.COMMENT_ORIGINAL_COMMENT_ID, "");
         comment.put(Comment.COMMENT_ORIGINAL_COMMENT_NAME, "");
         comment.put(Comment.COMMENT_THUMBNAIL_URL, Thumbnails.GRAVATAR + "59a5e8209c780307dbe9c9ba728073f5??s=60&r=G");
@@ -463,7 +470,7 @@ public class InitService {
             final JSONObject tag = new JSONObject();
 
             LOGGER.log(Level.TRACE, "Found a new tag[title={0}] in article[title={1}]",
-                    new Object[]{tagTitle, article.optString(Article.ARTICLE_TITLE)});
+                    tagTitle, article.optString(Article.ARTICLE_TITLE));
             tag.put(Tag.TAG_TITLE, tagTitle);
             tag.put(Tag.TAG_REFERENCE_COUNT, 1);
             tag.put(Tag.TAG_PUBLISHED_REFERENCE_COUNT, 1);
@@ -492,7 +499,7 @@ public class InitService {
      * @throws Exception exception
      */
     private void initAdmin(final JSONObject requestJSONObject) throws Exception {
-        LOGGER.info("Initializing admin....");
+        LOGGER.debug("Initializing admin....");
         final JSONObject admin = new JSONObject();
 
         admin.put(User.USER_NAME, requestJSONObject.getString(User.USER_NAME));
@@ -506,7 +513,25 @@ public class InitService {
 
         userRepository.add(admin);
 
-        LOGGER.info("Initialized admin");
+        LOGGER.debug("Initialized admin");
+    }
+
+    /**
+     * Initializes link.
+     *
+     * @throws Exception exception
+     */
+    private void initLink() throws Exception {
+        final JSONObject link = new JSONObject();
+
+        link.put(Link.LINK_TITLE, "黑客派");
+        link.put(Link.LINK_ADDRESS, "https://hacpai.com");
+        link.put(Link.LINK_DESCRIPTION, "黑客与画家的社区");
+
+        final int maxOrder = linkRepository.getMaxOrder();
+
+        link.put(Link.LINK_ORDER, maxOrder + 1);
+        final String ret = linkRepository.add(link);
     }
 
     /**
@@ -516,7 +541,7 @@ public class InitService {
      * @throws JSONException json exception
      */
     private void initStatistic() throws RepositoryException, JSONException {
-        LOGGER.info("Initializing statistic....");
+        LOGGER.debug("Initializing statistic....");
         final JSONObject statistic = new JSONObject();
 
         statistic.put(Keys.OBJECT_ID, Statistic.STATISTIC);
@@ -527,7 +552,7 @@ public class InitService {
         statistic.put(Statistic.STATISTIC_PUBLISHED_BLOG_COMMENT_COUNT, 0);
         statisticRepository.add(statistic);
 
-        LOGGER.info("Initialized statistic");
+        LOGGER.debug("Initialized statistic");
     }
 
     /**
@@ -536,7 +561,7 @@ public class InitService {
      * @throws Exception exception
      */
     private void initReplyNotificationTemplate() throws Exception {
-        LOGGER.info("Initializing reply notification template");
+        LOGGER.debug("Initializing reply notification template");
 
         final JSONObject replyNotificationTemplate = new JSONObject(DefaultPreference.DEFAULT_REPLY_NOTIFICATION_TEMPLATE);
 
@@ -554,7 +579,7 @@ public class InitService {
         bodyOpt.put(Option.OPTION_VALUE, replyNotificationTemplate.optString("body"));
         optionRepository.add(bodyOpt);
 
-        LOGGER.info("Initialized reply notification template");
+        LOGGER.debug("Initialized reply notification template");
     }
 
     /**
@@ -564,7 +589,7 @@ public class InitService {
      * @throws Exception exception
      */
     private void initPreference(final JSONObject requestJSONObject) throws Exception {
-        LOGGER.info("Initializing preference....");
+        LOGGER.debug("Initializing preference....");
 
         final JSONObject noticeBoardOpt = new JSONObject();
         noticeBoardOpt.put(Keys.OBJECT_ID, Option.ID_C_NOTICE_BOARD);
@@ -789,7 +814,7 @@ public class InitService {
 
         TimeZones.setTimeZone(INIT_TIME_ZONE_ID);
 
-        LOGGER.info("Initialized preference");
+        LOGGER.debug("Initialized preference");
     }
 
     /**

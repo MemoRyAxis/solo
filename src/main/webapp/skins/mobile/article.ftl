@@ -7,6 +7,12 @@
         <meta name="keywords" content="${article.articleTags}" />
         <meta name="description" content="${article.articleAbstract?html}" />
         </@head>
+        <#if previousArticlePermalink??>
+            <link rel="prev" title="${previousArticleTitle}" href="${servePath}${previousArticlePermalink}">
+        </#if>
+        <#if nextArticlePermalink??>
+            <link rel="next" title="${nextArticleTitle}" href="${servePath}${nextArticlePermalink}">
+        </#if>
     </head>
     <body class="classic-wptouch-bg">
         <#include "header.ftl">
@@ -62,6 +68,7 @@
                     <li class="noborder"><a href="http://reddit.com/submit?url=${servePath}/?p=12&title=${article.articleTitle}" target="_blank"><img src="${staticServePath}/skins/${skinDirName}/themes/core/core-images/bookmarks/reddit.jpg" alt="" /> Reddit</a></li>
                 </ul>
             </div>
+            <div id="externalRelevantArticles" class="post"></div>
             <@comments commentList=articleComments article=article></@comments>
         </div>
         <#include "footer.ftl">    

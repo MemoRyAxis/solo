@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2015, b3log.org
+ * Copyright (c) 2010-2017, b3log.org & hacpai.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,6 @@
 package org.b3log.solo.event.symphony;
 
 
-import java.net.MalformedURLException;
-import java.net.URL;
 import org.b3log.latke.Keys;
 import org.b3log.latke.Latkes;
 import org.b3log.latke.event.AbstractEventListener;
@@ -38,6 +36,9 @@ import org.b3log.solo.model.Comment;
 import org.b3log.solo.model.Option;
 import org.b3log.solo.service.PreferenceQueryService;
 import org.json.JSONObject;
+
+import java.net.MalformedURLException;
+import java.net.URL;
 
 
 /**
@@ -78,7 +79,7 @@ public final class CommentSender extends AbstractEventListener<JSONObject> {
         final JSONObject data = event.getData();
 
         LOGGER.log(Level.DEBUG, "Processing an event[type={0}, data={1}] in listener[className={2}]",
-            new Object[] {event.getType(), data, ArticleSender.class.getName()});
+                event.getType(), data, ArticleSender.class.getName());
         try {
             final JSONObject originalComment = data.getJSONObject(Comment.COMMENT);
 
@@ -92,8 +93,8 @@ public final class CommentSender extends AbstractEventListener<JSONObject> {
             }
 
             if (Latkes.getServePath().contains("localhost")) {
-                LOGGER.log(Level.INFO, "Blog Solo runs on local server, so should not send this comment[id={0}] to Symphony",
-                    new Object[] {originalComment.getString(Keys.OBJECT_ID)});
+                LOGGER.log(Level.TRACE, "Solo runs on local server, so should not send this comment[id={0}] to Symphony",
+                        originalComment.getString(Keys.OBJECT_ID));
                 return;
             }
 

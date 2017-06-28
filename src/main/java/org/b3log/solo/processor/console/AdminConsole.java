@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2015, b3log.org
+ * Copyright (c) 2010-2017, b3log.org & hacpai.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,23 +16,22 @@
 package org.b3log.solo.processor.console;
 
 import com.qiniu.util.Auth;
-import java.util.Calendar;
-import java.util.Locale;
-import java.util.Map;
-import java.util.TimeZone;
-import javax.inject.Inject;
-import javax.servlet.http.HttpServletRequest;
+import jodd.io.ZipUtil;
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.StringUtils;
 import org.b3log.latke.Keys;
 import org.b3log.latke.Latkes;
+import org.b3log.latke.RuntimeDatabase;
 import org.b3log.latke.event.Event;
 import org.b3log.latke.event.EventException;
 import org.b3log.latke.event.EventManager;
+import org.b3log.latke.ioc.inject.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.model.Plugin;
 import org.b3log.latke.model.User;
 import org.b3log.latke.plugin.ViewLoadEventData;
+import org.b3log.latke.repository.jdbc.util.Connections;
 import org.b3log.latke.service.LangPropsService;
 import org.b3log.latke.service.ServiceException;
 import org.b3log.latke.servlet.HTTPRequestContext;
@@ -40,6 +39,7 @@ import org.b3log.latke.servlet.HTTPRequestMethod;
 import org.b3log.latke.servlet.annotation.RequestProcessing;
 import org.b3log.latke.servlet.annotation.RequestProcessor;
 import org.b3log.latke.servlet.renderer.freemarker.AbstractFreeMarkerRenderer;
+import org.b3log.latke.util.Execs;
 import org.b3log.latke.util.Strings;
 import org.b3log.solo.SoloServletListener;
 import org.b3log.solo.model.Common;
@@ -54,11 +54,23 @@ import org.b3log.solo.service.UserQueryService;
 import org.b3log.solo.util.Thumbnails;
 import org.json.JSONObject;
 
+import javax.servlet.ServletOutputStream;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.Statement;
+import java.util.*;
+
 /**
  * Admin console render processing.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.2.1.8, Nov 20, 2015
+ * @version 1.5.2.11, Jun 18, 2017
  * @since 0.4.1
  */
 @RequestProcessor
@@ -67,7 +79,7 @@ public class AdminConsole {
     /**
      * Logger.
      */
-    private static final Logger LOGGER = Logger.getLogger(AdminConsole.class.getName());
+    private static final Logger LOGGER = Logger.getLogger(AdminConsole.class);
 
     /**
      * Language service.
@@ -104,6 +116,16 @@ public class AdminConsole {
      */
     @Inject
     private EventManager eventManager;
+
+    /**
+     * Imports markdown files.
+     *
+     * @param context
+     * @param request
+     */
+    public void importMDs(final HTTPRequestContext context, final HttpServletRequest request) {
+        
+    }
 
     /**
      * Shows administrator index with the specified context.
@@ -158,7 +180,8 @@ public class AdminConsole {
                     final Auth auth = Auth.create(qiniu.optString(Option.ID_C_QINIU_ACCESS_KEY),
                             qiniu.optString(Option.ID_C_QINIU_SECRET_KEY));
 
-                    final String uploadToken = auth.uploadToken(qiniu.optString(Option.ID_C_QINIU_BUCKET));
+                    final String uploadToken = auth.uploadToken(qiniu.optString(Option.ID_C_QINIU_BUCKET),
+                            null, 3600 * 6, null);
                     dataModel.put("qiniuUploadToken", uploadToken);
                     dataModel.put(Option.ID_C_QINIU_DOMAIN, qiniu.optString(Option.ID_C_QINIU_DOMAIN));
                 } catch (final Exception e) {
@@ -196,20 +219,20 @@ public class AdminConsole {
      * @param context the specified context
      */
     @RequestProcessing(value = {"/admin-article.do",
-        "/admin-article-list.do",
-        "/admin-comment-list.do",
-        "/admin-link-list.do",
-        "/admin-page-list.do",
-        "/admin-others.do",
-        "/admin-draft-list.do",
-        "/admin-user-list.do",
-        "/admin-plugin-list.do",
-        "/admin-main.do",
-        "/admin-about.do"},
+            "/admin-article-list.do",
+            "/admin-comment-list.do",
+            "/admin-link-list.do",
+            "/admin-page-list.do",
+            "/admin-others.do",
+            "/admin-draft-list.do",
+            "/admin-user-list.do",
+            "/admin-category-list.do",
+            "/admin-plugin-list.do",
+            "/admin-main.do",
+            "/admin-about.do"},
             method = HTTPRequestMethod.GET)
     public void showAdminFunctions(final HttpServletRequest request, final HTTPRequestContext context) {
         final AbstractFreeMarkerRenderer renderer = new ConsoleRenderer();
-
         context.setRenderer(renderer);
 
         final String requestURI = request.getRequestURI();
@@ -222,10 +245,10 @@ public class AdminConsole {
         final Map<String, String> langs = langPropsService.getAll(locale);
         final Map<String, Object> dataModel = renderer.getDataModel();
 
+        dataModel.put("supportExport", RuntimeDatabase.MYSQL == Latkes.getRuntimeDatabase()
+                || RuntimeDatabase.H2 == Latkes.getRuntimeDatabase());
         dataModel.putAll(langs);
-
         Keys.fillRuntime(dataModel);
-
         dataModel.put(Option.ID_C_LOCALE_STRING, locale.toString());
 
         fireFreeMarkerActionEvent(templateName, dataModel);
@@ -284,10 +307,127 @@ public class AdminConsole {
     }
 
     /**
+     * Exports data as SQL file.
+     *
+     * @param request  the specified HTTP servlet request
+     * @param response the specified HTTP servlet response
+     * @param context  the specified HTTP request context
+     * @throws Exception exception
+     */
+    @RequestProcessing(value = "/console/export/sql", method = HTTPRequestMethod.GET)
+    public void exportSQL(final HttpServletRequest request, final HttpServletResponse response, final HTTPRequestContext context)
+            throws Exception {
+        if (!userQueryService.isAdminLoggedIn(request)) {
+            response.sendError(HttpServletResponse.SC_FORBIDDEN);
+
+            return;
+        }
+
+        if (!Latkes.runsWithJDBCDatabase()) {
+            context.renderJSON().renderMsg("Just support MySQL/H2 export now");
+
+            return;
+        }
+
+        final RuntimeDatabase runtimeDatabase = Latkes.getRuntimeDatabase();
+
+        final String dbUser = Latkes.getLocalProperty("jdbc.username");
+        final String dbPwd = Latkes.getLocalProperty("jdbc.password");
+        final String dbURL = Latkes.getLocalProperty("jdbc.URL");
+        String sql; // exported SQL script
+
+        if (RuntimeDatabase.MYSQL == runtimeDatabase) {
+            String db = StringUtils.substringAfterLast(dbURL, "/");
+            db = StringUtils.substringBefore(db, "?");
+
+            try {
+                if (StringUtils.isNotBlank(dbPwd)) {
+                    sql = Execs.exec("mysqldump -u" + dbUser + " -p" + dbPwd + " --databases " + db);
+                } else {
+                    sql = Execs.exec("mysqldump -u" + dbUser + " --databases " + db);
+                }
+            } catch (final Exception e) {
+                LOGGER.log(Level.ERROR, "Export failed", e);
+                context.renderJSON().renderMsg("Export failed, please check log");
+
+                return;
+            }
+        } else if (RuntimeDatabase.H2 == runtimeDatabase) {
+            final Connection connection = Connections.getConnection();
+            final Statement statement = connection.createStatement();
+
+            try {
+                final StringBuilder sqlBuilder = new StringBuilder();
+                final ResultSet resultSet = statement.executeQuery("SCRIPT");
+                while (resultSet.next()) {
+                    final String stmt = resultSet.getString(1);
+                    sqlBuilder.append(stmt).append(Strings.LINE_SEPARATOR);
+                }
+                resultSet.close();
+                statement.close();
+
+                sql = sqlBuilder.toString();
+            } catch (final Exception e) {
+                LOGGER.log(Level.ERROR, "Export failed", e);
+                context.renderJSON().renderMsg("Export failed, please check log");
+
+                return;
+            } finally {
+                if (null != connection) {
+                    connection.close();
+                }
+            }
+        } else {
+            context.renderJSON().renderMsg("Just support MySQL/H2 export now");
+
+            return;
+        }
+
+        if (StringUtils.isBlank(sql)) {
+            context.renderJSON().renderMsg("Export failed, please check log");
+
+            return;
+        }
+
+        final String tmpDir = System.getProperty("java.io.tmpdir");
+        String localFilePath = tmpDir + File.separator + "b3_solo_" + UUID.randomUUID().toString() + ".sql";
+        LOGGER.trace(localFilePath);
+        final File localFile = new File(localFilePath);
+
+        try {
+            final byte[] data = sql.getBytes("UTF-8");
+
+            final OutputStream output = new FileOutputStream(localFile);
+            IOUtils.write(data, output);
+            IOUtils.closeQuietly(output);
+
+            final File zipFile = ZipUtil.zip(localFile);
+
+            final FileInputStream inputStream = new FileInputStream(zipFile);
+            final byte[] zipData = IOUtils.toByteArray(inputStream);
+            IOUtils.closeQuietly(inputStream);
+
+            response.setContentType("application/zip");
+            response.setHeader("Content-Disposition", "attachment; filename=\"solo.sql.zip\"");
+
+            final ServletOutputStream outputStream = response.getOutputStream();
+            outputStream.write(zipData);
+            outputStream.flush();
+            outputStream.close();
+        } catch (final Exception e) {
+            LOGGER.log(Level.ERROR, "Export failed", e);
+            context.renderJSON().renderMsg("Export failed, please check log");
+
+            return;
+
+        }
+    }
+
+    /**
      * Fires FreeMarker action event with the host template name and data model.
      *
      * @param hostTemplateName the specified host template name
-     * @param dataModel the specified data model
+     * @param dataModel        the specified data model
      */
     private void fireFreeMarkerActionEvent(final String hostTemplateName, final Map<String, Object> dataModel) {
         try {

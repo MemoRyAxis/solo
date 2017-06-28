@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2015, b3log.org
+ * Copyright (c) 2010-2017, b3log.org & hacpai.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ import org.json.JSONObject;
  * This class defines option model relevant keys.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.3.0.1, Nov 20, 2015
+ * @version 1.3.0.4, Feb 17, 2017
  * @since 0.6.0
  */
 public final class Option {
@@ -246,6 +246,7 @@ public final class Option {
      * <ul>
      * <li>"tinyMCE"</li>
      * <li>"CodeMirror-Markdown"</li>
+     * <li>"KindEditor"</li>
      * </ul>
      * </p>
      */
@@ -354,7 +355,7 @@ public final class Option {
         /**
          * Default skin directory name.
          */
-        public static final String DEFAULT_SKIN_DIR_NAME = "yilia";
+        public static final String DEFAULT_SKIN_DIR_NAME = "9IPHP";
 
         /**
          * Default language.
@@ -381,7 +382,7 @@ public final class Option {
         /**
          * Default meta keywords..
          */
-        public static final String DEFAULT_META_KEYWORDS = "Java 博客,GAE,b3log";
+        public static final String DEFAULT_META_KEYWORDS = "Solo,Java 博客,开源";
 
         /**
          * Default meta description..
@@ -466,7 +467,7 @@ public final class Option {
         /**
          * Default editor type.
          */
-        public static final String DEFAULT_EDITOR_TYPE = "tinyMCE";
+        public static final String DEFAULT_EDITOR_TYPE = "CodeMirror-Markdown";
 
         static {
             final JSONArray signs = new JSONArray();

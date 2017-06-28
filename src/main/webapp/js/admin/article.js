@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2015, b3log.org
+ * Copyright (c) 2010-2017, b3log.org & hacpai.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
  *
  * @author <a href="http://vanessa.b3log.org">Liyuan Li</a>
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.2.3.3, Sep 16, 2015
+ * @version 1.4.5.7, May 21, 2017
  */
 admin.article = {
     currentEditorType: '',
@@ -34,6 +34,52 @@ admin.article = {
     autoSaveDraftTimer: "",
     // 自动保存间隔
     AUTOSAVETIME: 1000 * 60,
+    /**
+     * 初始化上传组建
+     */
+    initUploadFile: function (id) {
+        var filename = "";
+        $('#' + id).fileupload({
+            multipart: true,
+            url: "https://up.qbox.me",
+            add: function (e, data) {
+                filename = data.files[0].name;
+
+                data.submit();
+
+                $('#' + id + ' span').text('uploading...');
+            },
+            formData: function (form) {
+                var data = form.serializeArray();
+                var ext = filename.substring(filename.lastIndexOf(".") + 1);
+
+                data.push({name: 'key', value: getUUID() + "." + ext});
+                data.push({name: 'token', value: qiniu.qiniuUploadToken});
+
+                return data;
+            },
+            done: function (e, data) {
+                $('#' + id + ' span').text('');
+                var qiniuKey = data.result.key;
+                if (!qiniuKey) {
+                    alert("Upload error, please check Qiniu configurations");
+
+                    return;
+                }
+
+                $('#' + id).after('<div>![' + data.files[0].name + '](http://'
+                        + qiniu.qiniuDomain + qiniuKey + ')</div>');
+            },
+            fail: function (e, data) {
+                $('#' + id + ' span').text("Upload error, please check Qiniu configurations [" + data.errorThrown + "]");
+            }
+        }).on('fileuploadprocessalways', function (e, data) {
+            var currentFile = data.files[data.index];
+            if (data.files.error && currentFile.error) {
+                alert(currentFile.error);
+            }
+        });
+    },
     /**
      * @description 获取文章并把值塞入发布文章页面 
      * @param {String} id 文章 id
@@ -292,24 +338,56 @@ admin.article = {
      * @description 发布文章页面设置文章按钮、发布到社区等状态的显示
      */
     setStatus: function () {
+        $.ajax({// Gets all tags
+            url: latkeConfig.servePath + "/console/tags",
+            type: "GET",
+            cache: false,
+            success: function (result, textStatus) {
+                $("#tipMsg").text(result.msg);
+                if (!result.sc) {
+                    $("#loadMsg").text("");
+                    return;
+                }
+
+                if (0 >= result.tags.length) {
+                    return;
+                }
+
+                $("#tagCheckboxPanel>span").remove("");
+
+                var spans = "";
+                for (var i = 0; i < result.tags.length; i++) {
+                    spans += "<span>" + result.tags[i].tagTitle + "</span>";
+                }
+                $("#tagCheckboxPanel").html(spans + '<div class="clear"></div>');
+
+                $("#loadMsg").text("");
+            }
+        });
+
         // set button status
         if (this.status) {
             if (this.status.isArticle) {
                 $("#unSubmitArticle").show();
-                $("#submitArticle").hide();
+                $("#saveArticle").hide();
+                $("#submitArticle").show();
             } else {
                 $("#submitArticle").show();
                 $("#unSubmitArticle").hide();
+                $("#saveArticle").show();
             }
             if (this.status.articleHadBeenPublished) {
                 $("#postToCommunityPanel").hide();
             } else {
-                $("#postToCommunityPanel").show();
+                // 1.0.0 开始默认会发布到社区
+                // $("#postToCommunityPanel").show();
             }
         } else {
             $("#submitArticle").show();
             $("#unSubmitArticle").hide();
-            $("#postToCommunityPanel").show();
+            $("#saveArticle").show();
+            // 1.0.0 开始默认会发布到社区
+            // $("#postToCommunityPanel").show();
         }
 
         $("#postToCommunity").attr("checked", "checked");
@@ -345,7 +423,8 @@ admin.article = {
             }
         });
 
-        $(".markdown-preview-main").html("");
+        $(".editor-preview-active").html("").removeClass('editor-preview-active');
+        $("#uploadContent").remove();
     },
     /**
      * @description 初始化发布文章页面
@@ -353,42 +432,11 @@ admin.article = {
      */
     init: function (fun) {
         this.currentEditorType = Label.editorType;
+
         // Inits Signs.
-        $.ajax({
-            url: latkeConfig.servePath + "/console/signs/",
-            type: "GET",
-            cache: false,
-            success: function (result, textStatus) {
-                $("#tipMsg").text(result.msg);
-                if (!result.sc) {
-                    $("#loadMsg").text("");
-                    return;
-                }
-
-                $(".signs button").each(function (i) {
-                    // Sets signs.
-                    if (i === result.signs.length) {
-                        $("#articleSign1").addClass("selected");
-                    } else {
-                        $("#articleSign" + result.signs[i].oId).tip({
-                            content: result.signs[i].signHTML === "" ? Label.signIsNullLabel :
-                                    result.signs[i].signHTML.replace(/\n/g, "").replace(/<script.*<\/script>/ig, ""),
-                            position: "top"
-                        });
-                    }
-                    // Binds checkbox event.
-                    $(this).click(function () {
-                        if (this.className !== "selected") {
-                            $(".signs button").each(function () {
-                                this.className = "";
-                            });
-                            this.className = "selected";
-                        }
-                    });
-                });
-
-                $("#loadMsg").text("");
-            }
+        $(".signs button").click(function (i) {
+            $(".signs button").removeClass('selected');
+            $(this).addClass('selected');
         });
 
         // For tag auto-completion
@@ -416,7 +464,7 @@ admin.article = {
                     height: 160,
                     buttonText: Label.selectLabel,
                     data: tags
-                });
+                }).width($("#tag").parent().width() - 68);
 
                 $("#loadMsg").text("");
             }
@@ -429,8 +477,8 @@ admin.article = {
             } else {
                 admin.article.add(true);
             }
-        });
-
+        }
+        );
         $("#saveArticle").click(function () {
             if (admin.article.status.id) {
                 admin.article.update(admin.article.status.isArticle);
@@ -439,48 +487,17 @@ admin.article = {
             }
         });
 
-        // upload
-        var qiniu = window.qiniu;
+        this.initUploadFile('articleUpload');
 
-        $('#articleUpload').fileupload({
-             multipart: true,
-            url: "http://upload.qiniu.com/",
-            formData: function (form) {
-                var data = form.serializeArray();
-                data.push({name: 'token', value: qiniu.qiniuUploadToken});
-                return data;
-            }, 
-            done: function (e, data) {
-                var qiniuKey = data.result.key;
-                if (!qiniuKey) {
-                    alert("Upload error");
-                    return;
-                }
-                
-                var t = new Date().getTime();
-                    $('#articleUpload').after('<div><a target="_blank" href="http://' + qiniu.qiniuDomain + qiniuKey + '?' + t
-                            + '">[' + data.files[0].name + ']</a> http://' 
-                            + qiniu.qiniuDomain + qiniuKey + '?' + t + '</div>');
-            },
-            fail: function (e, data) {
-                alert("Upload error: " + data.errorThrown);
-            }
-        }).on('fileuploadprocessalways', function (e, data) {
-            var currentFile = data.files[data.index];
-            if (data.files.error && currentFile.error) {
-                alert(currentFile.error);
-            }
-        });
-        
         // editor
-        admin.editors.articleEditor = new Editor({
+        admin.editors.articleEditor = new SoloEditor({
             id: "articleContent",
             kind: "all",
             fun: fun,
             height: 500
         });
 
-        admin.editors.abstractEditor = new Editor({
+        admin.editors.abstractEditor = new SoloEditor({
             id: "abstract",
             kind: "simple",
             height: 200
@@ -652,3 +669,18 @@ admin.register.article = {
         $("#tipMsg").text("");
     }
 };
+
+function getUUID() {
+    var d = new Date().getTime();
+
+    var ret = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+        var r = (d + Math.random() * 16) % 16 | 0;
+        d = Math.floor(d / 16);
+        return (c == 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+
+    ret = ret.replace(new RegExp("-", 'g'), "");
+
+    return ret;
+}
+;

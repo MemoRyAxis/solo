@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2015, b3log.org
+ * Copyright (c) 2010-2017, b3log.org & hacpai.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,14 +15,10 @@
  */
 package org.b3log.solo.processor;
 
-
-import java.net.URL;
-import javax.inject.Inject;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import org.b3log.latke.Keys;
 import org.b3log.latke.Latkes;
 import org.b3log.latke.RuntimeEnv;
+import org.b3log.latke.ioc.inject.Inject;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.model.Pagination;
 import org.b3log.latke.model.User;
@@ -40,20 +36,23 @@ import org.b3log.solo.SoloServletListener;
 import org.b3log.solo.model.Article;
 import org.b3log.solo.model.Option;
 import org.b3log.solo.model.Statistic;
-import org.b3log.solo.service.ArticleQueryService;
-import org.b3log.solo.service.PreferenceQueryService;
-import org.b3log.solo.service.StatisticQueryService;
-import org.b3log.solo.service.TagQueryService;
-import org.b3log.solo.service.UserQueryService;
+import org.b3log.solo.model.Tag;
+import org.b3log.solo.service.*;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.net.URL;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
  * Blog processor.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.2.0.4, Nov 20, 2015
+ * @version 1.3.0.4, Dec 17, 2015
  * @since 0.4.6
  */
 @RequestProcessor
@@ -110,7 +109,7 @@ public class BlogProcessor {
      * <li>Serve path</li>
      * <li>Static serve path</li>
      * <li>Solo version</li>
-     * <li>Runtime environment (GAE/LOCAL)</li>
+     * <li>Runtime environment (LOCAL)</li>
      * <li>Locale</li>
      * </ul>
      *
@@ -147,7 +146,7 @@ public class BlogProcessor {
     }
 
     /**
-     * Sync user to http://hacpai.com.
+     * Sync user to https://hacpai.com.
      *
      * @param context the specified context
      * @throws Exception exception
@@ -165,7 +164,7 @@ public class BlogProcessor {
         if (Latkes.getServePath().contains("localhost")) {
             return;
         }
-        
+
         final JSONObject preference = preferenceQueryService.getPreference();
 
         if (null == preference) {
@@ -178,7 +177,7 @@ public class BlogProcessor {
         httpRequest.setRequestMethod(HTTPRequestMethod.POST);
         final JSONObject requestJSONObject = new JSONObject();
 
-        final JSONObject admin = userQueryService.getAdmin();        
+        final JSONObject admin = userQueryService.getAdmin();
 
         requestJSONObject.put(User.USER_NAME, admin.getString(User.USER_NAME));
         requestJSONObject.put(User.USER_EMAIL, admin.getString(User.USER_EMAIL));
@@ -211,7 +210,7 @@ public class BlogProcessor {
      */
     @RequestProcessing(value = "/blog/articles-tags", method = HTTPRequestMethod.GET)
     public void getArticlesTags(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response)
-        throws Exception {
+            throws Exception {
         final String pwd = request.getParameter("pwd");
 
         if (Strings.isEmptyOrNull(pwd)) {
@@ -280,5 +279,42 @@ public class BlogProcessor {
                 }
             }
         }
+    }
+
+    /**
+     * Gets interest tags (top 10 and bottom 10).
+     *
+     * <pre>
+     * {
+     *     "data": ["tag1", "tag2", ....]
+     * }
+     * </pre>
+     *
+     * @param context the specified context
+     * @param request the specified HTTP servlet request
+     * @param response the specified HTTP servlet response
+     * @throws Exception io exception
+     */
+    @RequestProcessing(value = "/blog/interest-tags", method = HTTPRequestMethod.GET)
+    public void getInterestTags(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response)
+            throws Exception {
+        final JSONRenderer renderer = new JSONRenderer();
+        context.setRenderer(renderer);
+
+        final JSONObject ret = new JSONObject();
+        renderer.setJSONObject(ret);
+        final Set<String> tagTitles = new HashSet<>();
+
+        final List<JSONObject> topTags = tagQueryService.getTopTags(10);
+        for (final JSONObject topTag : topTags) {
+            tagTitles.add(topTag.optString(Tag.TAG_TITLE));
+        }
+
+        final List<JSONObject> bottomTags = tagQueryService.getBottomTags(10);
+        for (final JSONObject bottomTag : bottomTags) {
+            tagTitles.add(bottomTag.optString(Tag.TAG_TITLE));
+        }
+
+        ret.put("data", tagTitles);
     }
 }

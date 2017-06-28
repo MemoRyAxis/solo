@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2015, b3log.org
+ * Copyright (c) 2010-2017, b3log.org & hacpai.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
  *
  * @author <a href="http://vanessa.b3log.org">Liyuan Li</a>
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.2.1.9, Nov 20, 2015
+ * @version 1.2.1.10, Nov 15, 2016
  */
 
 /* preference 相关操作 */
@@ -99,10 +99,6 @@ admin.preference = {
                 var signs = eval('(' + preference.signs + ')');
                 for (var j = 1; j < signs.length; j++) {
                     $("#preferenceSign" + j).val(signs[j].signHTML);
-                    $("#preferenceSignButton" + j).tip({
-                        content: signs[j].signHTML === "" ? Label.signIsNullLabel : signs[j].signHTML.replace(/\n/g, "").replace(/<script.*<\/script>/ig, ""),
-                        position: "bottom"
-                    });
                 }
 
                 $("#articleListDisplay").val(preference.articleListStyle);
@@ -256,8 +252,6 @@ admin.preference = {
                         $("#articleSign" + signs[i].oId).tip("option", "content",
                                 signs[i].signHTML === "" ? Label.signIsNullLabel : signs[i].signHTML.replace(/\n/g, "").replace(/<script.*<\/script>/ig, ""));
                     }
-                    $("#preferenceSignButton" + signs[i].oId).tip("option", "content",
-                            signs[i].signHTML === "" ? Label.signIsNullLabel : signs[i].signHTML.replace(/\n/g, "").replace(/<script.*<\/script>/ig, ""));
                 }
 
                 $("#loadMsg").text("");
@@ -284,8 +278,11 @@ admin.preference = {
             cache: false,
             data: JSON.stringify(requestJSONObject),
             success: function (result, textStatus) {
+                if (result.sc) {
+                    window.location.reload();
+                }
+                
                 $("#tipMsg").text(result.msg);
-
                 $("#loadMsg").text("");
             }
         });

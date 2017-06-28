@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2015, b3log.org
+ * Copyright (c) 2010-2017, b3log.org & hacpai.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,6 @@ import org.b3log.latke.mail.MailService;
 import org.b3log.latke.mail.MailService.Message;
 import org.b3log.latke.mail.MailServiceFactory;
 import org.b3log.latke.util.Strings;
-import org.b3log.solo.SoloServletListener;
 import org.b3log.solo.event.EventTypes;
 import org.b3log.solo.model.Article;
 import org.b3log.solo.model.Comment;
@@ -42,7 +41,8 @@ import org.json.JSONObject;
  * This listener is responsible for processing article comment reply.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.1.1.7, Nov 20, 2015
+ * @author <a href="http://www.wanglay.com">Lei Wang</a>
+ * @version 1.2.1.7, May 6, 2016
  * @since 0.3.1
  */
 public final class ArticleCommentReplyNotifier extends AbstractEventListener<JSONObject> {
@@ -63,8 +63,9 @@ public final class ArticleCommentReplyNotifier extends AbstractEventListener<JSO
         final JSONObject comment = eventData.optJSONObject(Comment.COMMENT);
         final JSONObject article = eventData.optJSONObject(Article.ARTICLE);
 
-        LOGGER.log(Level.DEBUG, "Processing an event[type={0}, data={1}] in listener[className={2}]",
-                new Object[]{event.getType(), eventData, ArticleCommentReplyNotifier.class.getName()});
+        LOGGER.log(Level.DEBUG,
+                "Processing an event[type={0}, data={1}] in listener[className={2}]",
+                event.getType(), eventData, ArticleCommentReplyNotifier.class.getName());
         final String originalCommentId = comment.optString(Comment.COMMENT_ORIGINAL_COMMENT_ID);
 
         if (Strings.isEmptyOrNull(originalCommentId)) {
@@ -102,16 +103,14 @@ public final class ArticleCommentReplyNotifier extends AbstractEventListener<JSO
             final String blogTitle = preference.getString(Option.ID_C_BLOG_TITLE);
             final String adminEmail = preference.getString(Option.ID_C_ADMIN_EMAIL);
 
-            final String commentContent = comment.getString(Comment.COMMENT_CONTENT).replaceAll(SoloServletListener.ENTER_ESC, "<br/>");
+            final String commentContent = comment.getString(Comment.COMMENT_CONTENT);
             final String commentSharpURL = comment.getString(Comment.COMMENT_SHARP_URL);
             final Message message = new Message();
 
             message.setFrom(adminEmail);
             message.addRecipient(originalCommentEmail);
             final JSONObject replyNotificationTemplate = preferenceQueryService.getReplyNotificationTemplate();
-            final String mailSubject = replyNotificationTemplate.getString("subject").replace("${blogTitle}", blogTitle);
 
-            message.setSubject(mailSubject);
             final String articleTitle = article.getString(Article.ARTICLE_TITLE);
             final String articleLink = Latkes.getServePath() + article.getString(Article.ARTICLE_PERMALINK);
             final String commentName = comment.getString(Comment.COMMENT_NAME);
@@ -123,13 +122,29 @@ public final class ArticleCommentReplyNotifier extends AbstractEventListener<JSO
             } else {
                 commenter = commentName;
             }
+            final String mailSubject = replyNotificationTemplate.getString(
+                    "subject").replace("${postLink}", articleLink)
+                    .replace("${postTitle}", articleTitle)
+                    .replace("${replier}", commenter)
+                    .replace("${blogTitle}", blogTitle)
+                    .replace("${replyURL}",
+                            Latkes.getServePath() + commentSharpURL)
+                    .replace("${replyContent}", commentContent);
 
-            final String mailBody = replyNotificationTemplate.getString("body").replace("${postLink}", articleLink).replace("${postTitle}", articleTitle).replace("${replier}", commenter).replace("${replyURL}", Latkes.getServePath() + commentSharpURL).replace(
-                    "${replyContent}", commentContent);
+            message.setSubject(mailSubject);
+            final String mailBody = replyNotificationTemplate
+                    .getString("body")
+                    .replace("${postLink}", articleLink)
+                    .replace("${postTitle}", articleTitle)
+                    .replace("${replier}", commenter)
+                    .replace("${blogTitle}", blogTitle)
+                    .replace("${replyURL}",
+                            Latkes.getServePath() + commentSharpURL)
+                    .replace("${replyContent}", commentContent);
 
             message.setHtmlBody(mailBody);
             LOGGER.log(Level.DEBUG, "Sending a mail[mailSubject={0}, mailBody=[{1}] to [{2}]",
-                    new Object[]{mailSubject, mailBody, originalCommentEmail});
+                    mailSubject, mailBody, originalCommentEmail);
             mailService.send(message);
 
         } catch (final Exception e) {

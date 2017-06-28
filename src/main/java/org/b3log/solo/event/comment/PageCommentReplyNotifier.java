@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2015, b3log.org
+ * Copyright (c) 2010-2017, b3log.org & hacpai.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,6 @@ import org.b3log.latke.mail.MailService;
 import org.b3log.latke.mail.MailService.Message;
 import org.b3log.latke.mail.MailServiceFactory;
 import org.b3log.latke.util.Strings;
-import org.b3log.solo.SoloServletListener;
 import org.b3log.solo.event.EventTypes;
 import org.b3log.solo.model.Comment;
 import org.b3log.solo.model.Option;
@@ -66,7 +65,7 @@ public final class PageCommentReplyNotifier extends AbstractEventListener<JSONOb
         final JSONObject page = eventData.optJSONObject(Page.PAGE);
 
         LOGGER.log(Level.DEBUG, "Processing an event[type={0}, data={1}] in listener[className={2}]",
-            new Object[] {event.getType(), eventData, PageCommentReplyNotifier.class.getName()});
+                event.getType(), eventData, PageCommentReplyNotifier.class.getName());
         final String originalCommentId = comment.optString(Comment.COMMENT_ORIGINAL_COMMENT_ID);
 
         if (Strings.isEmptyOrNull(originalCommentId)) {
@@ -97,7 +96,7 @@ public final class PageCommentReplyNotifier extends AbstractEventListener<JSONOb
             final String blogTitle = preference.getString(Option.ID_C_BLOG_TITLE);
             final String adminEmail = preference.getString(Option.ID_C_ADMIN_EMAIL);
 
-            final String commentContent = comment.getString(Comment.COMMENT_CONTENT).replaceAll(SoloServletListener.ENTER_ESC, "<br/>");
+            final String commentContent = comment.getString(Comment.COMMENT_CONTENT);
             final String commentSharpURL = comment.getString(Comment.COMMENT_SHARP_URL);
             final Message message = new Message();
 
@@ -124,7 +123,7 @@ public final class PageCommentReplyNotifier extends AbstractEventListener<JSONOb
 
             message.setHtmlBody(mailBody);
             LOGGER.log(Level.DEBUG, "Sending a mail[mailSubject={0}, mailBody=[{1}] to [{2}]",
-                new Object[] {mailSubject, mailBody, originalCommentEmail});
+                    mailSubject, mailBody, originalCommentEmail);
             mailService.send(message);
         } catch (final Exception e) {
             LOGGER.log(Level.ERROR, e.getMessage(), e);

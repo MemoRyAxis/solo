@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2015, b3log.org
+ * Copyright (c) 2010-2017, b3log.org & hacpai.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,16 +15,11 @@
  */
 package org.b3log.solo.api.symphony;
 
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.util.Date;
-import javax.inject.Inject;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import org.apache.commons.lang.time.DateFormatUtils;
 import org.b3log.latke.Keys;
 import org.b3log.latke.event.Event;
 import org.b3log.latke.event.EventManager;
+import org.b3log.latke.ioc.inject.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.repository.Transaction;
@@ -38,7 +33,6 @@ import org.b3log.latke.urlfetch.URLFetchService;
 import org.b3log.latke.urlfetch.URLFetchServiceFactory;
 import org.b3log.latke.util.Requests;
 import org.b3log.latke.util.Strings;
-import org.b3log.solo.SoloServletListener;
 import org.b3log.solo.event.EventTypes;
 import org.b3log.solo.model.Article;
 import org.b3log.solo.model.Comment;
@@ -53,11 +47,17 @@ import org.b3log.solo.util.Comments;
 import org.b3log.solo.util.QueryResults;
 import org.json.JSONObject;
 
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.util.Date;
+
 /**
  * Comment receiver (from B3log Symphony).
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.1.0.10, Nov 20, 2015
+ * @version 1.1.1.12, Apr 25, 2017
  * @since 0.5.5
  */
 @RequestProcessor
@@ -137,6 +137,7 @@ public class CommentReceiver {
      *         "commentAuthorName": "",
      *         "commentAuthorEmail": "",
      *         "commentAuthorURL": "",
+     *         "commentAuthorThumbnailURL": "",
      *         "commentContent": "",
      *         "commentOriginalCommentId": "" // optional, if exists this key, the comment is an reply
      *     }
@@ -186,24 +187,23 @@ public class CommentReceiver {
             final String commentName = symphonyCmt.getString("commentAuthorName");
             final String commentEmail = symphonyCmt.getString("commentAuthorEmail").trim().toLowerCase();
             String commentURL = symphonyCmt.optString("commentAuthorURL");
-
             if (!commentURL.contains("://")) {
                 commentURL = "http://" + commentURL;
             }
-
             try {
                 new URL(commentURL);
             } catch (final MalformedURLException e) {
                 LOGGER.log(Level.WARN, "The comment URL is invalid [{0}]", commentURL);
                 commentURL = "";
             }
+            final String commentThumbnailURL = symphonyCmt.getString("commentAuthorThumbnailURL");
 
             final String commentId = symphonyCmt.optString(Keys.OBJECT_ID);
             String commentContent = symphonyCmt.getString(Comment.COMMENT_CONTENT);
 
-            commentContent += "<p class='cmtFromSym'><i>该评论同步自 <a href='" + SoloServletListener.B3LOG_SYMPHONY_SERVE_PATH
-                    + "/article/" + symphonyCmt.optString("commentSymphonyArticleId") + "#" + commentId
-                    + "' target='_blank'>黑客派</a></i></p>";
+//            commentContent += "<p class='cmtFromSym'><i>该评论同步自 <a href='" + SoloServletListener.B3LOG_SYMPHONY_SERVE_PATH
+//                    + "/article/" + symphonyCmt.optString("commentSymphonyArticleId") + "#" + commentId
+//                    + "' target='_blank'>黑客派</a></i></p>";
             final String originalCommentId = symphonyCmt.optString(Comment.COMMENT_ORIGINAL_COMMENT_ID);
             // Step 1: Add comment
             final JSONObject comment = new JSONObject();
@@ -213,11 +213,12 @@ public class CommentReceiver {
             comment.put(Comment.COMMENT_NAME, commentName);
             comment.put(Comment.COMMENT_EMAIL, commentEmail);
             comment.put(Comment.COMMENT_URL, commentURL);
+            comment.put(Comment.COMMENT_THUMBNAIL_URL, commentThumbnailURL);
             comment.put(Comment.COMMENT_CONTENT, commentContent);
             final Date date = new Date();
 
             comment.put(Comment.COMMENT_DATE, date);
-            ret.put(Comment.COMMENT_DATE, DateFormatUtils.format(date, "yyyy-MM-dd hh:mm:ss"));
+            ret.put(Comment.COMMENT_DATE, DateFormatUtils.format(date, "yyyy-MM-dd HH:mm:ss"));
             if (!Strings.isEmptyOrNull(originalCommentId)) {
                 originalComment = commentRepository.get(originalCommentId);
                 if (null != originalComment) {
@@ -230,14 +231,13 @@ public class CommentReceiver {
                     comment.put(Comment.COMMENT_ORIGINAL_COMMENT_ID, "");
                     comment.put(Comment.COMMENT_ORIGINAL_COMMENT_NAME, "");
                     LOGGER.log(Level.WARN, "Not found orginal comment[id={0}] of reply[name={1}, content={2}]",
-                            new String[]{originalCommentId, commentName, commentContent});
+                            originalCommentId, commentName, commentContent);
                 }
             } else {
                 comment.put(Comment.COMMENT_ORIGINAL_COMMENT_ID, "");
                 comment.put(Comment.COMMENT_ORIGINAL_COMMENT_NAME, "");
             }
 
-            commentMgmtService.setCommentThumbnailURL(comment);
             ret.put(Comment.COMMENT_THUMBNAIL_URL, comment.getString(Comment.COMMENT_THUMBNAIL_URL));
             // Sets comment on article....
             comment.put(Comment.COMMENT_ON_ID, articleId);

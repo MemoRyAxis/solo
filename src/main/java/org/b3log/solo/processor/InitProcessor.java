@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2015, b3log.org
+ * Copyright (c) 2010-2017, b3log.org & hacpai.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,14 +15,9 @@
  */
 package org.b3log.solo.processor;
 
-import java.util.Calendar;
-import java.util.Locale;
-import java.util.Map;
-import javax.inject.Inject;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import org.b3log.latke.Keys;
 import org.b3log.latke.Latkes;
+import org.b3log.latke.ioc.inject.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.model.Role;
@@ -48,11 +43,17 @@ import org.b3log.solo.util.QueryResults;
 import org.b3log.solo.util.Thumbnails;
 import org.json.JSONObject;
 
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.util.Calendar;
+import java.util.Locale;
+import java.util.Map;
+
 /**
  * Solo initialization service.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.2.0.8, Oct 17, 2015
+ * @version 1.2.0.11, May 25, 2017
  * @since 0.4.0
  */
 @RequestProcessor
@@ -61,7 +62,7 @@ public class InitProcessor {
     /**
      * Logger.
      */
-    private static final Logger LOGGER = Logger.getLogger(InitProcessor.class.getName());
+    private static final Logger LOGGER = Logger.getLogger(InitProcessor.class);
 
     /**
      * Initialization service.
@@ -82,20 +83,10 @@ public class InitProcessor {
     private LangPropsService langPropsService;
 
     /**
-     * Max user name length.
-     */
-    public static final int MAX_USER_NAME_LENGTH = 20;
-
-    /**
-     * Min user name length.
-     */
-    public static final int MIN_USER_NAME_LENGTH = 1;
-
-    /**
      * Shows initialization page.
      *
-     * @param context the specified http request context
-     * @param request the specified http servlet request
+     * @param context  the specified http request context
+     * @param request  the specified http servlet request
      * @param response the specified http servlet response
      * @throws Exception exception
      */
@@ -130,21 +121,20 @@ public class InitProcessor {
     /**
      * Initializes Solo.
      *
-     * @param context the specified http request context
-     * @param request the specified http servlet request, for example,      <pre>
-     * {
-     *     "userName": "",
-     *     "userEmail": "",
-     *     "userPassword": ""
-     * }
-     * </pre>
-     *
+     * @param context  the specified http request context
+     * @param request  the specified http servlet request, for example,      <pre>
+     *                 {
+     *                     "userName": "",
+     *                     "userEmail": "",
+     *                     "userPassword": ""
+     *                 }
+     *                 </pre>
      * @param response the specified http servlet response
      * @throws Exception exception
      */
     @RequestProcessing(value = "/init", method = HTTPRequestMethod.POST)
     public void initSolo(final HTTPRequestContext context, final HttpServletRequest request,
-            final HttpServletResponse response) throws Exception {
+                         final HttpServletResponse response) throws Exception {
         if (initService.isInited()) {
             response.sendRedirect("/");
 
@@ -152,11 +142,9 @@ public class InitProcessor {
         }
 
         final JSONRenderer renderer = new JSONRenderer();
-
         context.setRenderer(renderer);
 
         final JSONObject ret = QueryResults.defaultResult();
-
         renderer.setJSONObject(ret);
 
         try {
@@ -173,14 +161,13 @@ public class InitProcessor {
                 return;
             }
 
-            if (invalidUserName(userName)) {
-                ret.put(Keys.MSG, "Init failed, please check your input [username: length [1, 20], content {a-z, A-Z, 0-9}]");
+            if (UserExt.invalidUserName(userName)) {
+                ret.put(Keys.MSG, "Init failed, please check your username (length [1, 20], content {a-z, A-Z, 0-9}, do not contain 'admin' for security reason]");
 
                 return;
             }
 
             final Locale locale = Locales.getLocale(request);
-
             requestJSONObject.put(Keys.LOCALE, locale.toString());
 
             initService.init(requestJSONObject);
@@ -201,39 +188,5 @@ public class InitProcessor {
 
             ret.put(Keys.MSG, e.getMessage());
         }
-    }
-
-    /**
-     * Checks whether the specified name is invalid.
-     *
-     * <p>
-     * A valid user name:
-     * <ul>
-     * <li>length [1, 20]</li>
-     * <li>content {a-z, A-Z, 0-9}</li>
-     * </ul>
-     * </p>
-     *
-     * @param name the specified name
-     * @return {@code true} if it is invalid, returns {@code false} otherwise
-     */
-    public static boolean invalidUserName(final String name) {
-        final int length = name.length();
-        if (length < MIN_USER_NAME_LENGTH || length > MAX_USER_NAME_LENGTH) {
-            return true;
-        }
-
-        char c;
-        for (int i = 0; i < length; i++) {
-            c = name.charAt(i);
-
-            if (('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || '0' <= c && c <= '9') {
-                continue;
-            }
-
-            return true;
-        }
-
-        return false;
     }
 }

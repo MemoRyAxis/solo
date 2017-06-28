@@ -6,7 +6,8 @@
         <title>${blogTitle} - ${adminConsoleLabel}</title>
         <link type="text/css" rel="stylesheet" href="${staticServePath}/css/default-base${miniPostfix}.css?${staticResourceVersion}" />
         <link type="text/css" rel="stylesheet" href="${staticServePath}/css/default-admin${miniPostfix}.css?${staticResourceVersion}" />
-        <link type="text/css" rel="stylesheet" href="${staticServePath}/js/lib/CodeMirror/codemirror.css?${staticResourceVersion}" />
+        <link type="text/css" rel="stylesheet" href="${staticServePath}/js/lib/CodeMirrorEditor/codemirror.min.css?${staticResourceVersion}" />
+        <link type="text/css" rel="stylesheet" href="${staticServePath}/js/lib/highlight.js-9.6.0/styles/github.css?${staticResourceVersion}" />
         <link rel="icon" type="image/png" href="${staticServePath}/favicon.png" />
     </head>
     <body onhashchange="admin.setCurByHash();">
@@ -19,24 +20,27 @@
                 </a>
                
                 <span class="right"> 
-                    <span>${userName}</span><a href="${servePath}" title='${indexLabel}'>${indexLabel}</a><a href='javascript:admin.logout();' title='${logoutLabel}'>${logoutLabel}</a>
+                    <a href="${servePath}" title='${indexLabel}'>
+                        <div class="avatar" style="background-image: url(${gravatar})"></div>
+                        ${userName}
+                    </a>
+                    <a href='javascript:admin.logout();' title='${logoutLabel}'>${logoutLabel}</a>
                 </span>
-                <div class="clear"></div>
             </div>
             <div id="tabs">
                 <ul>
                     <li>
                         <div id="tabs_main">
                             <a href="#main">
-                                <span class="left usersIcon"></span>${adminIndexLabel}
+                                <span class="icon-refresh"></span> ${adminIndexLabel}
                             </a>
                         </div>
                     </li>
                     <li>
-                        <div onclick="admin.collapseNav(this)">
-                            <span class="left postIcon"></span>
+                        <div id="tabArticleTitle" class="tab-current" onclick="admin.collapseNav(this)">
+                            <span class="icon-article"></span>
                             ${articleLabel}
-                            <span class="ico-arrow-up"></span>
+                            <span class="icon-chevron-up right"></span>
                         </div>
                         <ul id="tabArticleMgt">
                             <li>
@@ -59,20 +63,25 @@
                     <li>
                         <div id="tabs_comment-list">
                             <a href="#comment-list">
-                                <span class="left commentIcon"></span>${commentListLabel}
+                                <span class="icon-cmts"></span> ${commentListLabel}
                             </a>
                         </div>
                     </li>
                     <li>
                         <div id="tabToolsTitle" onclick="admin.collapseNav(this)">
-                            <span class="left preferenceIcon"></span>
+                            <span class="icon-setting"></span>
                             ${ToolLabel}
-                            <span class="ico-arrow-down"></span>
+                            <span class="icon-chevron-down right"></span>
                         </div>
                         <ul class="none" id="tabTools">
                             <li>
                                 <div id="tabs_preference">
                                     <a href="#tools/preference">${preferenceLabel}</a>
+                                </div>
+                            </li>
+                            <li>
+                                <div id="tabs_category-list">
+                                    <a href="#tools/category-list">${categoryListLabel}</a>
                                 </div>
                             </li>
                             <li>
@@ -105,7 +114,7 @@
                     <li>
                         <div id="tabs_about">
                             <a href="#about">
-                                <span class="left aboutIcon"></span>${aboutLabel}
+                                <span class="icon-info"></span> ${aboutLabel}
                             </a>
                         </div>
                     </li>
@@ -118,6 +127,7 @@
                 <div id="tabsPanel_draft-list" class="none"></div>
                 <div id="tabsPanel_link-list" class="none"></div>
                 <div id="tabsPanel_preference" class="none"></div>
+                <div id="tabsPanel_category-list" class="none"></div>
                 <div id="tabsPanel_page-list" class="none"></div>
                 <div id="tabsPanel_others" class="none"></div>
                 <div id="tabsPanel_user-list" class="none"></div>
@@ -125,18 +135,14 @@
                 <div id="tabsPanel_plugin-list" class="none"></div>
                 <div id="tabsPanel_about" class="none"></div>
             </div>
+            <div class="clear"></div>
             <div class="footer">
-                Powered by <a href="http://b3log.org" target="_blank">B3log 开源</a> • <a href="http://b3log.org/services/#solo" target="_blank">Solo</a> ${version}
+                Powered by <a href="http://b3log.org" target="_blank">B3log 开源</a> • <a href="https://hacpai.com/tag/solo" target="_blank">Solo</a> ${version}
             </div>
         </div>
-        <script src="${staticServePath}/js/lib/jquery/jquery.min.js"></script>
-        <script src="${staticServePath}/js/lib/jquery/file-upload-9.10.1/vendor/jquery.ui.widget.js"></script>
-        <script src="${staticServePath}/js/lib/jquery/file-upload-9.10.1/jquery.iframe-transport.js"></script>
-        <script src="${staticServePath}/js/lib/jquery/file-upload-9.10.1/jquery.fileupload.js"></script>
-        <script src="${staticServePath}/js/lib/jquery/jquery.bowknot.min.js?${staticResourceVersion}"></script>
+        <script src="${staticServePath}/js/lib/compress/admin-lib.min.js"></script>
         <script src="${servePath}/js/lib/tiny_mce/tiny_mce.js"></script>
-        <script src="${staticServePath}/js/lib/KindEditor/kindeditor-min.js"></script>
-        <script src="${staticServePath}/js/lib/CodeMirror/codemirror.js"></script>
+        <script src="${servePath}/js/lib/KindEditor/kindeditor-min.js"></script>
         <script src="${staticServePath}/js/common${miniPostfix}.js"></script>
         <#if "" == miniPostfix>
         <script src="${staticServePath}/js/admin/admin.js"></script>
@@ -155,6 +161,7 @@
         <script src="${staticServePath}/js/admin/preference.js"></script>
         <script src="${staticServePath}/js/admin/pluginList.js"></script>
         <script src="${staticServePath}/js/admin/userList.js"></script>
+        <script src="${staticServePath}/js/admin/categoryList.js"></script>
         <script src="${staticServePath}/js/admin/commentList.js"></script>
         <script src="${staticServePath}/js/admin/plugin.js"></script>
         <script src="${staticServePath}/js/admin/main.js"></script>

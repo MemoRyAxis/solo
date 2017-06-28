@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2015, b3log.org
+ * Copyright (c) 2010-2017, b3log.org & hacpai.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
  *
  * @author <a href="http://vanessa.b3log.org">Liyuan Li</a>
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.0.1.5, May 28, 2013
+ * @version 1.0.2.5, Aug 23, 2016
  */
 
 /* article-list 相关操作 */
@@ -82,7 +82,7 @@ admin.articleList = {
                 articleData = [];
                 for (var i = 0; i < articles.length; i++) {
                     articleData[i] = {};
-                    articleData[i].title = "<a href='" + latkeConfig.servePath + articles[i].articlePermalink + "' target='_blank' title='" + articles[i].articleTitle + "' class='no-underline'>"
+                    articleData[i].title = "<a href=\"" + latkeConfig.servePath + articles[i].articlePermalink + "\" target='_blank' title='" + articles[i].articleTitle + "' class='no-underline'>"
                     + articles[i].articleTitle + "</a><span class='table-tag'>" + articles[i].articleTags + "</span>";
                     articleData[i].date = $.bowknot.getDate(articles[i].articleCreateTime);
                     articleData[i].comments = articles[i].articleCommentCount;

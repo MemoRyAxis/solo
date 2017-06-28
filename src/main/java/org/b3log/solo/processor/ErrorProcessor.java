@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2015, b3log.org
+ * Copyright (c) 2010-2017, b3log.org & hacpai.com
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,14 +15,8 @@
  */
 package org.b3log.solo.processor;
 
-
-import java.io.File;
-import java.io.IOException;
-import java.util.Map;
-import javax.inject.Inject;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import org.apache.commons.lang.StringUtils;
+import org.b3log.latke.ioc.inject.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.service.LangPropsService;
@@ -39,12 +33,16 @@ import org.b3log.solo.processor.util.Filler;
 import org.b3log.solo.service.PreferenceQueryService;
 import org.json.JSONObject;
 
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.util.Map;
 
 /**
  * Error processor.
- * 
+ *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.0.0.2, Jul 11, 2012
+ * @version 1.0.1.2, Oct 9, 2016
  * @since 0.4.5
  */
 @RequestProcessor
@@ -80,25 +78,25 @@ public class ErrorProcessor {
 
     /**
      * Shows the user template page.
-     * 
+     *
      * @param context the specified context
      * @param request the specified HTTP servlet request
      * @param response the specified HTTP servlet response
-     * @throws IOException io exception 
+     * @throws IOException io exception
      */
     @RequestProcessing(value = "/error/*.html", method = HTTPRequestMethod.GET)
     public void showErrorPage(final HTTPRequestContext context, final HttpServletRequest request, final HttpServletResponse response)
-        throws IOException {
+            throws IOException {
         final String requestURI = request.getRequestURI();
         String templateName = StringUtils.substringAfterLast(requestURI, "/");
 
         templateName = StringUtils.substringBefore(templateName, ".") + ".ftl";
-        LOGGER.log(Level.DEBUG, "Shows error page[requestURI={0}, templateName={1}]", new Object[] {requestURI, templateName});
+        LOGGER.log(Level.DEBUG, "Shows error page[requestURI={0}, templateName={1}]", requestURI, templateName);
 
         final ConsoleRenderer renderer = new ConsoleRenderer();
 
         context.setRenderer(renderer);
-        renderer.setTemplateName("error" + File.separatorChar + templateName);
+        renderer.setTemplateName("error/" + templateName);
 
         final Map<String, Object> dataModel = renderer.getDataModel();
 
